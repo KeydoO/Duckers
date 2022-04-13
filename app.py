@@ -26,3 +26,7 @@ class BooksHandler:
         resp.text = "Endpoint to create a book"
         
         
+@app.route("/template")
+def template_handler(req, resp):
+    resp.body = app.template("index.html", context={"name": "Alcazar", "title": "Best Framework"}).encode()
+

@@ -1,21 +1,29 @@
 # api.py
+import inspect
+import os
 from parse import parse
 from webob import Request, Response
-import inspect
+from requests import Session as RequestsSession
+from wsgiadapter import WSGIAdapter as RequestsWSGIAdapter
+from jinja2 import Environment, FileSystemLoader
 
 
 class API:
-    def __init__(self):
+    def __init__(self, templates_dir="templates"):
         self.routes = {}
+        
+        self.templates_env = Environment(loader=FileSystemLoader(os.path.abspath(templates_dir)))
+
 
     def route(self, path):
         if path in self.routes:
             raise AssertionError("Such route already exists.")
         def wrapper(handler):
-            self.routes[path] = handler
+            self.add_route(path, handler)
             return handler
 
         return wrapper
+
 
     def __call__(self, environ, start_response):
         request = Request(environ)
@@ -24,6 +32,7 @@ class API:
 
         return response(environ, start_response)
 
+
     def find_handler(self, request_path):
         for path, handler in self.routes.items():
             parse_result = parse(path, request_path)
@@ -31,6 +40,7 @@ class API:
                 return handler, parse_result.named
 
         return None, None
+
 
     def handle_request(self, request):
         response = Response()
@@ -49,6 +59,26 @@ class API:
 
         return response
 
+
     def default_response(self, response):
         response.status_code = 404
         response.text = "Not found."
+
+
+    def test_session(self, base_url="http://testserver"):
+        session = RequestsSession()
+        session.mount(prefix=base_url, adapter=RequestsWSGIAdapter(self))
+        return session
+
+
+    def add_route(self, path, handler):
+        assert path not in self.routes, "Such route already exists."
+
+        self.routes[path] = handler
+        
+        
+    def template(self, template_name, context=None):
+        if context is None:
+            context = {}
+
+        return self.templates_env.get_template(template_name).render(**context)
